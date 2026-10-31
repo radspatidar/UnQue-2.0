@@ -26,11 +26,18 @@ app.use(cors());
 app.use('/users', userRoutes);
 app.use('/professor',professorRoutes);
 app.use('/general', generalRoutes);
+app.get('/health', (req, res) => {
+    res.status(200).json({
+        status: 'UP',
+        message: 'Application is running',
+        timestamp: new Date().toISOString()
+    });
+});
 app.use(notFound)
 app.use(errorMiddleware)
 const PORT = process.env.PORT  || 5001;
-mongoose.connect(process.env.MONGO_URL, {
-}).then(() => {
+mongoose.connect(process.env.MONGO_URL)
+.then(() => {
     app.listen(PORT, () => console.log(`Server Port: ${PORT}`));  
 }).catch((error) => console.log(`${error} did not connect`)); 
 

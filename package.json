@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "description": "The backend for a student and professor appointment system",
   "main": "index.js",
-  "type": "module",
+  "type": "module",                                                                           
   "scripts": {
-    "dev": "nodemon server.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "test": "jest"
   },
   "author": "",
@@ -24,6 +25,7 @@
     "nodemon": "^3.1.7"
   },
   "devDependencies": {
-    "jest": "^23.6.0"
+    "jest": "^23.6.0",
+    "nodemon": "^3.1.7"
   }
 }

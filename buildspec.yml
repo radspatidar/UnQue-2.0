@@ -1,0 +1,38 @@
+
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: "ap-southeast-2"
+    AWS_ACCOUNT_ID: "741868400311"
+    ECR_REPOSITORY_NAME: "unque"
+    ECR_REPOSITORY_URI: "741868400311.dkr.ecr.ap-southeast-2.amazonaws.com/unque"
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 22
+    commands:
+      - echo "Installing project dependencies"
+      - npm ci
+
+  pre_build:
+    commands:
+      - echo "Running Jest tests"
+      - npm test -- --passWithNoTests
+      - echo "Authenticating with Amazon ECR"
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
+
+  build:
+    commands:
+      - echo "Building Docker image"
+      - export IMAGE_TAG=$(echo "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c 1-12)
+      - docker build -t "$ECR_REPOSITORY_URI:$IMAGE_TAG" .
+
+  post_build:
+    commands:
+      - echo "Pushing Docker image to ECR"
+      - docker push "$ECR_REPOSITORY_URI:$IMAGE_TAG"
+      - echo "Docker image pushed successfully"
+      - echo "IMAGE_URI=$ECR_REPOSITORY_URI:$IMAGE_TAG"
+

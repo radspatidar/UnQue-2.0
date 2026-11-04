@@ -1,38 +1,44 @@
-
 version: 0.2
 
 env:
   variables:
     AWS_DEFAULT_REGION: "ap-southeast-2"
-    AWS_ACCOUNT_ID: "741868400311"
     ECR_REPOSITORY_NAME: "unque"
-    ECR_REPOSITORY_URI: "741868400311.dkr.ecr.ap-southeast-2.amazonaws.com/unque"
 
 phases:
   install:
     runtime-versions:
       nodejs: 22
     commands:
-      - echo "Installing project dependencies"
+      - echo "Starting UnQue backend build"
       - npm ci
 
   pre_build:
     commands:
-      - echo "Running Jest tests"
-      - npm test -- --passWithNoTests
+      - set -eu
+      - echo "Validating release information"
+      - test -n "$RELEASE_TAG"
+      - echo "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'
+      - AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_REGISTRY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com"
+      - ECR_REPOSITORY_URI="${ECR_REGISTRY}/${ECR_REPOSITORY_NAME}"
       - echo "Authenticating with Amazon ECR"
-      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
   build:
     commands:
+      - set -eu
+      - echo "Running application tests"
+      - npm test -- --passWithNoTests
       - echo "Building Docker image"
-      - export IMAGE_TAG=$(echo "$CODEBUILD_RESOLVED_SOURCE_VERSION" | cut -c 1-12)
-      - docker build -t "$ECR_REPOSITORY_URI:$IMAGE_TAG" .
+      - docker build --pull -f dockerfile -t "${ECR_REPOSITORY_URI}:${RELEASE_TAG}" .
+      - docker image inspect "${ECR_REPOSITORY_URI}:${RELEASE_TAG}" > /dev/null
 
   post_build:
     commands:
-      - echo "Pushing Docker image to ECR"
-      - docker push "$ECR_REPOSITORY_URI:$IMAGE_TAG"
-      - echo "Docker image pushed successfully"
-      - echo "IMAGE_URI=$ECR_REPOSITORY_URI:$IMAGE_TAG"
-
+      - set -eu
+      - echo "Pushing image to ECR"
+      - docker push "${ECR_REPOSITORY_URI}:${RELEASE_TAG}"
+      - echo "Image push completed"
+      - printf 'IMAGE_URI=%s\n' "${ECR_REPOSITORY_URI}:${RELEASE_TAG}"
+      - printf 'IMAGE_TAG=%s\n' "$RELEASE_TAG"

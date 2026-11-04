@@ -63,6 +63,110 @@ const setAvailability = async (req, res, next) => {
   }
 };
 
+// Update an existing free availability slot
+
+const updateAvailability = async (req, res, next) => {
+  try {
+    const { availabilityId } = req.params;
+    const { startTime, endTime } = req.body;
+
+    const professorId = req.user.id;
+
+    if (!mongoose.Types.ObjectId.isValid(availabilityId)) {
+      return next(new HttpError("Invalid availability ID", 400));
+    }
+
+    // Validate dates
+    if (!startTime || !endTime || Number.isNaN(Date.parse(startTime)) || Number.isNaN(Date.parse(endTime))) {
+      return next(
+        new HttpError("Valid startTime and endTime are required", 400)
+      );
+    }
+
+    const newStart = new Date(startTime);
+    const newEnd = new Date(endTime);
+
+    if (newStart >= newEnd) {
+      return next(
+        new HttpError("Start time must be before end time", 400)
+      );
+    }
+
+    if (newStart <= new Date()) {
+      return next(
+        new HttpError("Availability must be in the future", 400)
+      );
+    }
+
+    // Find existing availability belonging to this professor
+    const availability = await Availability.findOne({
+      _id: availabilityId,
+      professorId: professorId
+    });
+
+    if (!availability) {
+      return next(
+        new HttpError("Availability not found for this professor", 404)
+      );
+    }
+
+    // Do not modify a slot that contains a booked appointment
+    const bookedAppointment = await Appointment.findOne({
+      professorId,
+      status: "booked",
+      time: {
+        $gte: availability.startTime,
+        $lt: availability.endTime
+      }
+    });
+
+    if (bookedAppointment) {
+      return next(
+        new HttpError(
+          "This slot has a booked appointment and cannot be rescheduled",
+          409
+        )
+      );
+    }
+
+    // Prevent overlapping availability
+    const overlap = await Availability.findOne({
+      professorId,
+      _id: { $ne: availability._id },
+      startTime: { $lt: newEnd },
+      endTime: { $gt: newStart }
+    });
+
+    if (overlap) {
+      return next(
+        new HttpError("Updated timing overlaps another availability", 409)
+      );
+    }
+
+    // Update the existing database document
+    availability.startTime = newStart;
+    availability.endTime = newEnd;
+
+    await availability.save();
+
+    return res.status(200).json({
+      message: "Availability timing updated successfully",
+      availability: {
+        _id: availability._id,
+        professorId: availability.professorId,
+        startTime: moment.utc(availability.startTime).format(),
+        endTime: moment.utc(availability.endTime).format()
+      }
+    });
+
+  } catch (error) {
+    console.error("Error updating availability:", error);
+
+    return next(
+      new HttpError("Updating availability failed", 500)
+    );
+  }
+};
 
 
   const cancelAppointments = async(req,res,next) => {
@@ -95,7 +199,7 @@ const setAvailability = async (req, res, next) => {
           professorId: new mongoose.Types.ObjectId(professorId),
           status: 'booked'
         },
-        { status: 'canceled' }  //  the status  needs to be canceled
+        { $set: { status: 'cancelled' } }  //  the status  needs to be canceled
       );
   
       res.status(200).json({
@@ -107,4 +211,4 @@ const setAvailability = async (req, res, next) => {
       return next(new HttpError(error));
     }
   };
-export {setAvailability, cancelAppointments};
+export {setAvailability, updateAvailability, cancelAppointments};

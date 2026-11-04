@@ -1,14 +1,6 @@
 pipeline {
     agent any
 
-    parameters {
-        string(
-            name: 'TAG_TO_DEPLOY',
-            defaultValue: '',
-            description: 'Release tag to deploy, e.g. v1.0.0. Leave empty when a webhook supplies GIT_REF.'
-        )
-    }
-
     environment {
         AWS_REGION = 'ap-southeast-2'
         AWS_ACCOUNT_ID = '741868400311'
@@ -32,7 +24,7 @@ pipeline {
         stage('Validate Release Tag') {
             steps {
                 script {
-                    def gitRef = (params.TAG_TO_DEPLOY ?: env.RELEASE_TAG ?: env.GIT_REF ?: '').trim()
+                    def gitRef = (env.GIT_REF ?: env.RELEASE_TAG ?: '').trim()
 
                     // Allow a bare tag such as v1.0.0 from the build parameter.
                     if (gitRef ==~ /^v[0-9]+\.[0-9]+\.[0-9]+$/) {
